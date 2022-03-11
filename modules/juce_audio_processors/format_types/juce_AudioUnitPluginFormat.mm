@@ -217,45 +217,51 @@ namespace AudioUnitFormatHelpers
                     manufacturer = String::fromCFString ((CFStringRef) manuString);
 
                 const ResFileRefNum resFileId = CFBundleOpenBundleResourceMap (bundleRef.get());
-                UseResFile (resFileId);
 
-                const OSType thngType = stringToOSType ("thng");
-                auto numResources = Count1Resources (thngType);
+                bool readSuccessful = false;
+                if (resFileId != -1) {
+                    UseResFile (resFileId);
 
-                if (numResources > 0)
-                {
-                    for (ResourceIndex i = 1; i <= numResources; ++i)
+                    const OSType thngType = stringToOSType ("thng");
+                    auto numResources = Count1Resources (thngType);
+                    if (numResources > 0)
                     {
-                        if (Handle h = Get1IndResource (thngType, i))
+                        for (ResourceIndex i = 1; i <= numResources; ++i)
                         {
-                            HLock (h);
-                            uint32 types[3];
-                            std::memcpy (types, *h, sizeof (types));
-
-                            if (types[0] == kAudioUnitType_MusicDevice
-                                 || types[0] == kAudioUnitType_MusicEffect
-                                 || types[0] == kAudioUnitType_Effect
-                                 || types[0] == kAudioUnitType_Generator
-                                 || types[0] == kAudioUnitType_Panner
-                                 || types[0] == kAudioUnitType_Mixer
-                                 || types[0] == kAudioUnitType_MIDIProcessor)
+                            if (Handle h = Get1IndResource (thngType, i))
                             {
-                                desc.componentType = types[0];
-                                desc.componentSubType = types[1];
-                                desc.componentManufacturer = types[2];
+                                HLock (h);
+                                uint32 types[3];
+                                std::memcpy (types, *h, sizeof (types));
 
-                                if (AudioComponent comp = AudioComponentFindNext (nullptr, &desc))
-                                    getNameAndManufacturer (comp, name, manufacturer);
+                                if (types[0] == kAudioUnitType_MusicDevice
+                                    || types[0] == kAudioUnitType_MusicEffect
+                                    || types[0] == kAudioUnitType_Effect
+                                    || types[0] == kAudioUnitType_Generator
+                                    || types[0] == kAudioUnitType_Panner
+                                    || types[0] == kAudioUnitType_Mixer
+                                    || types[0] == kAudioUnitType_MIDIProcessor)
+                                {
+                                    desc.componentType = types[0];
+                                    desc.componentSubType = types[1];
+                                    desc.componentManufacturer = types[2];
 
-                                break;
+                                    if (AudioComponent comp = AudioComponentFindNext (nullptr, &desc))
+                                        getNameAndManufacturer (comp, name, manufacturer);
+
+                                    readSuccessful = true;
+
+                                    break;
+                                }
+
+                                HUnlock (h);
+                                ReleaseResource (h);
                             }
-
-                            HUnlock (h);
-                            ReleaseResource (h);
                         }
                     }
                 }
-                else
+                
+                if (!readSuccessful)
                 {
                     NSBundle* bundle = [[NSBundle alloc] initWithPath: (NSString*) fileOrIdentifier.toCFString()];
 
@@ -269,7 +275,9 @@ namespace AudioUnitFormatHelpers
                     [bundle release];
                 }
 
-                CFBundleCloseBundleResourceMap (bundleRef.get(), resFileId);
+                if (resFileId != -1) {
+                    CFBundleCloseBundleResourceMap (bundleRef.get(), resFileId);    
+                }
             }
         }
 
